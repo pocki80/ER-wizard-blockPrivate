@@ -86,6 +86,9 @@ load () {
 
     # generate list arrays
     for i in $allintlist; do
+        #skip bridge members
+        (brctl show | awk '!$5 { if ($4) print $4; else  print $1}' | grep -iwq $i) && continue
+        [ $(find /opt/vyatta/config/active/interfaces/switch/*/switch-port/interface/$i 2>/dev/null | wc -l) -eq 0 ] || continue
         intfstatus=""
         echo "$blockedintlist" | grep -wiq "$i" && intfstatus='"enabled":"on",'
         path=$(find /opt/vyatta/config/active/interfaces/ -name description | grep "/$(echo $i | sed -e 's/\./\/vif\//ig')/")
