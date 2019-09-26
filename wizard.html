@@ -2,9 +2,9 @@
 
 EdgeMAX Wizard "ER-wizard-blockPrivate" created 09/2019 by CPO for FunkFeuer.at
 Works on EdgeRouter and EdgeRouter X / X-SFP (system version 1.10.0+)
-versioninfo=201909260
+versioninfo=201909261
 ^-- use version identifier as number: YYYYMMDDX whereas X can be intraday-version
-autoupdate=201901010
+autoupdate=201909260
 ^-- set autoupdate the same version identifier to allow autoupdates
 
 
@@ -26,15 +26,14 @@ autoupdate=201901010
 
 <fieldset id="interfaces" name="interfaces" class="primary expanded">
     <legend>Block incoming/outgoing traffic from RFC1918-Addresses from/to the following interfaces:</legend>
-    Make your private LAN ipv4 ranges (10/8 and 172.16/12 and 192.168/16) unreachable from any TRANSIT or WAN interfaces.
-
+    Make your private LAN ipv4 ranges (10/8 and 172.16/12 and 192.168/16) unreachable from any TRANSIT or WAN interfaces.<br>
+    <br>
     <div class="addable" data-min="1" data-max="1" data-object="interfaces" data-objectify="1">
         <div class="addable-template" style="padding-top:0px;">
             <div class="multi">
-                <div><input name="enabled" type="checkbox" onclick="validate()" disabled /></div>
-                <div><input id="interface" name="interfaces" size="5" disabled /></div>
-                <div><input id="rules" name="rules" size="8" disabled /></div>
-                <div><input id="name" name="name" size="40" disabled /></div>
+                <div><input name="enabled" type="checkbox" onclick="validate()" /></div>
+                <div><input id="interface" name="interface" size="7" readonly /></div>
+                <div><input id="name" name="name" size="40" readonly /></div>
             </div>
         </div>
         <div class="addable-container"></div>
