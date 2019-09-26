@@ -1,0 +1,337 @@
+#!/bin/bash
+#
+# EdgeMAX Wizard "ER-wizard-blockPrivate" created 09/2019 by CPO/BMK for FunkFeuer.at
+# Version 20190926
+# ^-- previous line is used from bmk-webstatus-package as version identification, dont remove "Version "
+# Shortform: ER-wizard-blockPrivate
+#
+# Github repository: https://github.com/pocki80/ER-wizard-blockPrivate
+#
+# Works on all EdgeRouter and EdgePoint Devices (system version 1.10.0+)
+#
+
+ACTION=$1
+INPUT=$2
+
+cfgusrdir="/config/user-data/"
+log="/var/log/0xffblockprivate.log"
+bootscript="/config/scripts/post-config.d/blockprivate.sh"
+
+#define update sources on github
+gitowner="pocki80"
+gitrepo="ER-wizard-blockPrivate"
+gitbranch="master"
+
+#
+# DO NOT EDIT BELOW HERE !
+#
+
+echo "EdgeMAX ER-wizard-blockPrivate Wizard started $(date +%Y-%m-%d/%H:%M:%S.%N)" >>$log
+
+#base64begin 
+# !dont edit or remove this comment!
+
+# remove installtion block
+sed -i '/^#base64begin/,/^#base64end$/d' $0
+# !dont edit or remove this comment!
+#base64end
+
+
+# function called when you click the wizard
+load () {
+    echo "Load procedure..." >>$log
+    packagestatus='"packagestatus":"ok"'
+
+    ####### wizard version check against github
+    # 
+    olsrdwizard=""
+    for i in $(find /config/wizard/feature/ -name wizard.html); do
+        if [[ $(head $i -n 10 | grep 'ER-wizard-blockPrivate') ]]; then
+            olsrdwizard=$i
+            break
+        fi
+    done
+    if [ ! $olsrdwizard ]; then
+        updatetext="error: ER-wizard-blockPrivate wizard.html not found!" >>$log 2>>$log
+    else
+        CURRENTVERSION=$(head -n 8 $olsrdwizard | grep -i versioninfo= | awk -F"=" {'print $2'})
+        if [ $((onlinecheck)) = 0 ]; then
+            GITVERSION=$(curl -s --connect-timeout 2 --speed-time 2 https://raw.githubusercontent.com/$gitowner/$gitrepo/$gitbranch/wizard.html | head -n 8 | grep -i versioninfo= | awk -F"=" {'print $2'})
+            if [ "$GITVERSION" ] && [ "$CURRENTVERSION" ]; then 
+                if [ $(($GITVERSION)) \> $(($CURRENTVERSION)) ]; then 
+                    updatetext="new version available: "$GITVERSION", current: "$CURRENTVERSION >>$log 2>>$log
+                else
+                    updatetext="current version "$CURRENTVERSION" is up-to-date" >>$log 2>>$log
+                fi
+            else
+                updatetext="version info not available. git:"$GITVERSION", current: "$CURRENTVERSION"." >>$log 2>>$log
+            fi
+        else
+            updatetext="version info not available. git:OFFLINE, current: "$CURRENTVERSION"." >>$log 2>>$log
+        fi
+    fi
+    updatestatus=',"updatestatus":"'$updatetext'"'
+    # end
+    ####### wizard version check against github
+
+    if [ -f /config/user-data/autoupdate.dat ] && [ "$(grep -i "wizard-blockPrivate=yes" /config/user-data/autoupdate.dat | wc -l)" == "1" ]; then
+        autoupdatefromgithub=',"autoupdatefromgithub":"on"'
+    fi
+    
+    
+    ####### get interfaces
+    # get interfaces
+    allintlist=$(ip -o l | awk '{print $2'} | sed -e 's/[:@].*//ig' | grep -E "eth|switch|br|vtun|wrap" | sort)
+    blockedintlist=$(iptables -vnL INPUT | awk '$0~/mark match 0x42/ && $3=="REJECT" {print $6}')
+
+    # generate list arrays
+    for i in $allintlist; do
+        intfstatus=""
+        echo "$blockedintlist" | grep -wiq "$i" && intfstatus='"enabled":"on",'
+        interfaces=$interfaces'{'$intfstatus'"interface":"'${i}'","name":"n","rules":"r"},'
+    done
+    interfaces=${interfaces%","}
+    # end
+    ####### get interfaces
+
+    # get all variables together for output
+    echo -n "{\"success\":\"1\",\"data\":{ $packagestatus $autoupdatefromgithub $updatestatus ,\"interfaces\":[$interfaces]" &&
+    echo -n " }," &&
+    echo    " \"definition\":{ }}"
+}
+
+change_interface () {
+    action="$1"; iface="$2"
+    if [ "$interface" ] && (ip -o l | awk '{print $2'} | sed -e 's/[:@].*//ig' | grep -qw "$interface" ); then
+        if [ "$action" == "I" ]; then
+            ipset -n list | grep -qwi rfc1918     || ipset create rfc1918 hash:net
+            ipset test rfc1918 10.0.0.0/8 -q      || ipset add rfc1918 10.0.0.0/8
+            ipset test rfc1918 172.16.0.0/12 -q  || ipset add rfc1918 172.16.0.0/12
+            ipset test rfc1918 192.168.0.0/16 -q  || ipset add rfc1918 192.168.0.0/16
+            iptables -t mangle -C PREROUTING -m set --match-set rfc1918 dst -j MARK --set-mark 66 2>/dev/null            || iptables -t mangle -I PREROUTING -m set --match-set rfc1918 dst -j MARK --set-mark 66
+            iptables -C INPUT   -i $interface -m mark --mark 66 -j REJECT --reject-with icmp-net-prohibited 2>/dev/null  || iptables -I INPUT   -i $interface -m mark --mark 66 -j REJECT --reject-with icmp-net-prohibited
+            iptables -C FORWARD -i $interface -m mark --mark 66 -j REJECT --reject-with icmp-net-prohibited 2>/dev/null  || iptables -I FORWARD -i $interface -m mark --mark 66 -j REJECT --reject-with icmp-net-prohibited
+            iptables -C FORWARD -o $interface -m mark --mark 66 -j REJECT --reject-with icmp-net-prohibited 2>/dev/null  || iptables -I FORWARD -o $interface -m mark --mark 66 -j REJECT --reject-with icmp-net-prohibited
+            iptables -C OUTPUT  -o $interface -m set --match-set rfc1918 dst -j REJECT --reject-with icmp-net-prohibited 2>/dev/null  || iptables -I OUTPUT  -o $interface -m set --match-set rfc1918 dst -j REJECT --reject-with icmp-net-prohibited
+        elif [ "$action" == "D" ]; then
+            iptables -C INPUT   -i $interface -m mark --mark 66 -j REJECT --reject-with icmp-net-prohibited 2>/dev/null  && iptables -D INPUT   -i $interface -m mark --mark 66 -j REJECT --reject-with icmp-net-prohibited
+            iptables -C FORWARD -i $interface -m mark --mark 66 -j REJECT --reject-with icmp-net-prohibited 2>/dev/null  && iptables -D FORWARD -i $interface -m mark --mark 66 -j REJECT --reject-with icmp-net-prohibited
+            iptables -C FORWARD -o $interface -m mark --mark 66 -j REJECT --reject-with icmp-net-prohibited 2>/dev/null  && iptables -D FORWARD -o $interface -m mark --mark 66 -j REJECT --reject-with icmp-net-prohibited
+            iptables -C OUTPUT  -o $interface -m set --match-set rfc1918 dst -j REJECT --reject-with icmp-net-prohibited 2>/dev/null  && iptables -D OUTPUT  -o $interface -m set --match-set rfc1918 dst -j REJECT --reject-with icmp-net-prohibited
+            [ $(iptables -vnL INPUT | awk '$0~/mark match 0x42/ && $3=="REJECT" {print $6}' | wc -l) -eq 0 ] && 
+                iptables -t mangle -C PREROUTING -m set --match-set rfc1918 dst -j MARK --set-mark 66 2>/dev/null &&
+                iptables -t mangle -D PREROUTING -m set --match-set rfc1918 dst -j MARK --set-mark 66
+        else
+            echo "Action $action not recognized, should be I or D"
+            return 3
+        fi
+    else
+        echo "Interface $interface not recognized"
+        return 4
+    fi
+    return 0
+}
+
+
+# function called when you click apply
+apply () {
+    echo "Apply procedure..." >>$log
+    updatefromgithub=$(jq -M -r '.updatefromgithub' $INPUT)
+    if [[ "$updatefromgithub" == "on" ]]; then
+        echo "update from github requested" >>$log 2>>$log
+        olsrdwizard=""
+        for i in $(find /config/wizard/feature/ -name wizard.html); do
+            if [[ $(head $i -n 10 | grep 'ER-wizard-blockPrivate') ]]; then
+                olsrdwizard=$i
+                break
+            fi
+        done
+        if [ ! $olsrdwizard ]; then
+            echo "error: ER-wizard-blockPrivate wizard.html not found!" >>$log 2>>$log
+        elif [ $((onlinecheck)) != 0 ]; then
+            echo "currently offline" >>$log 2>>$log
+        else
+            curl -s -o /tmp/ER-wizard.tar.gz --connect-timeout 2 --speed-time 2 https://codeload.github.com/$gitowner/$gitrepo/legacy.tar.gz/$gitbranch >>$log 2>>$log
+            tar   -xvzf /tmp/ER-wizard.tar.gz -C /tmp >/tmp/result.txt 2>>$log
+            rm -f       /tmp/ER-wizard.tar.gz >>$log 2>>$log
+            while read LINE; do
+              set $LINE
+              if [ $(basename $LINE) == "wizard-run" ] || [ $(basename $LINE) == "wizard.html" ] || [ $(basename $LINE) == "validator.json" ]; then W=1; else W=2; fi
+              [ -f "/tmp/"$LINE ] && [ $W == "1" ] && cp "/tmp/"$LINE $(dirname $olsrdwizard)"/"$(basename $LINE) >>$log 2>>$log
+            done < /tmp/result.txt
+            rm /tmp/result.txt >>$log 2>>$log
+            rm -Rf /tmp/$gitowner-$gitrepo* >>$log 2>>$log
+            chmod 755 $(dirname $olsrdwizard)"/"wizard-run >>$log 2>>$log
+            $(dirname $olsrdwizard)"/"wizard-run load >>$log 2>>$log
+        fi
+    fi
+    autoupdatefromgithub=$(jq -M -r '.autoupdatefromgithub' $INPUT)
+    if [[ "$autoupdatefromgithub" == "on" ]]; then
+        #check for auto-update wizard, install if not there!!
+        wiz=""
+        for i in $(find /config/wizard/feature/ -name wizard.html); do
+            if [[ $(head $i -n 10 | grep "ER-wizard-AutoUpdate") ]]; then
+                wiz=$i
+                break
+            fi
+        done
+        if [ ! $wiz ]; then 
+            #autoupdate-wizard mit scripten fehlt: offline-install
+            wiz="/config/wizard/feature/AutoUpdate/wizard.html"
+            echo "Installing "$(dirname $wiz)"..." >>$log 2>>$log
+            if [ ! -d $(dirname $wiz) ]; then 
+                mkdir $(dirname $wiz) >>$log 2>>$log
+                chmod --reference=$(dirname $olsrdwizard) $(dirname $wiz) >>$log 2>>$log
+                chown --reference=$(dirname $olsrdwizard) $(dirname $wiz) >>$log 2>>$log
+            fi
+            #extract offline --> replaces download-procedure, Version 20181001, https://github.com/pocki80/ER-wizard-AutoUpdate
+            echo "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
+zfvr/rq//s3XH7wmIhIAcgAA
+" | base64 -d >/tmp/ER-wizard.tar.gz 2>>$log
+            tar   -xvzf /tmp/ER-wizard.tar.gz -C /tmp >/tmp/result.txt 2>>$log
+            rm -f       /tmp/ER-wizard.tar.gz >>$log 2>>$log
+            while read LINE; do
+                set $LINE
+                if [ $(basename $LINE) == "wizard-run" ] || [ $(basename $LINE) == "wizard.html" ] || [ $(basename $LINE) == "validator.json" ]; then W=1; else W=2; fi
+                if [ -f "/tmp/"$LINE ] && [ $W == "1" ]; then
+                    sudo cp "/tmp/"$LINE $(dirname $wiz)"/"$(basename $LINE) >>$log 2>>$log
+                    sudo chmod --reference=$(dirname $olsrdwizard)"/"$(basename $LINE) $(dirname $wiz)"/"$(basename $LINE) >>$log 2>>$log
+                    sudo chown --reference=$(dirname $olsrdwizard)"/"$(basename $LINE) $(dirname $wiz)"/"$(basename $LINE) >>$log 2>>$log
+                fi
+            done < /tmp/result.txt
+            rm /tmp/result.txt
+            rm -Rf /tmp/$git2owner-$git2repo* >>$log 2>>$log
+            chmod 755 $(dirname $wiz)"/"wizard-run >>$log 2>>$log
+            echo "Installing done, now triggering initial load..." >>$log 2>>$log
+            $(dirname $wiz)"/"wizard-run load  >>$log 2>>$log
+        fi
+        #remove "no" if exists
+        if [ -f /config/user-data/autoupdate.dat ] &&
+           [ "$(grep -i "wizard-blockPrivate=no" /config/user-data/autoupdate.dat |wc -l)" == "1" ]; then
+            linenumber=$(grep -ni "wizard-blockPrivate=no" /config/user-data/autoupdate.dat | awk -F: {'print $1'})
+            sed -i $linenumber'd' /config/user-data/autoupdate.dat 2>>$log
+            sed -i '/^$/d' /config/user-data/autoupdate.dat 2>>$log
+        fi
+        if [ ! -f /config/user-data/autoupdate.dat ]; then
+            #create settings file if missing
+            echo 'wizard-blockPrivate=yes' >/config/user-data/autoupdate.dat 2>>$log
+            echo '' >>/config/user-data/autoupdate.dat 2>>$log
+            sed -i '/^$/d' /config/user-data/autoupdate.dat 2>>$log
+        else
+            #add yes line if missing
+            if [ "$(grep -i "wizard-blockPrivate=yes" /config/user-data/autoupdate.dat |wc -l)" == "0" ]; then
+                echo 'wizard-blockPrivate=yes' >>/config/user-data/autoupdate.dat 2>>$log
+                echo '' >>/config/user-data/autoupdate.dat 2>>$log
+                sed -i '/^$/d' /config/user-data/autoupdate.dat 2>>$log
+            fi
+        fi
+    else
+        #remove yes line if exists
+        if [ -f /config/user-data/autoupdate.dat ] &&
+           [ "$(grep -i "wizard-blockPrivate=yes" /config/user-data/autoupdate.dat |wc -l)" == "1" ]; then
+            linenumber=$(grep -ni "wizard-blockPrivate=yes" /config/user-data/autoupdate.dat | awk -F: {'print $1'})
+            sed -i $linenumber'd' /config/user-data/autoupdate.dat 2>>$log
+            sed -i '/^$/d' /config/user-data/autoupdate.dat 2>>$log
+            curl -so /dev/null --connect-timeout 2 --speed-time 2 "https://ff.cybercomm.at/aulog/logthis.php?w=off-blockPrivate&r=$(hostname)" >/dev/null 2>/dev/null
+        fi
+    fi
+    # end
+    ####### wizard manual update from github
+    
+    allintlist=$(ip -o l | awk '{print $2'} | sed -e 's/[:@].*//ig' | grep -E "eth|switch|br|vtun|wrap" | sort)
+    blockedintlist=$(iptables -vnL INPUT | awk '$0~/mark match 0x42/ && $3=="REJECT" {print $6}')
+    enabledintlist=$(jq -M -r '.interfaces[]  | select (.enabled=="on") | .interface' $INPUT)
+    for i in $allintlist; do
+        if (echo "$enabledintlist" | grep -iwq "$i") && ! (echo "$blockedintlist" | grep -iwq "$i"); then
+            echo "enable $i for blocking!"
+            change_interface I $i
+        fi
+        if (echo "$blockedintlist" | grep -iwq "$i") && ! (echo "$enabledintlist" | grep -iwq "$i"); then
+            echo "disable $i for blocking!"
+            change_interface D $i
+        fi
+    done
+
+    #make settings boot-resistant
+    echo '#!/bin/bash' >$bootscript
+    sed -n "/^change_interface ()/,/^}/p" $0 >>$bootscript
+    echo "for i in "$(echo $enabledintlist)"; do" >>$bootscript
+    echo "  change_interface I \$i" >>$bootscript
+    echo "done" >>$bootscript
+    echo "exit 0" >>$bootscript
+    chmod 755 $bootscript
+
+    # for debugging purposes
+    cp $INPUT /tmp/result.json
+
+    # $ret and $output comes from port change
+    if [ "$ret" == "1" ]; then
+        echo "{\"success\":\"0\",\"error\": \"${output//\"/\'}\"}"
+    else
+        echo "{\"success\":\"1\"}"
+    fi
+}
+
+case "$ACTION" in
+    load)
+        load
+        ;;
+    apply)
+        apply
+        ;;
+esac
+
+echo "EdgeMAX ER-wizard-blockPrivate Wizard ended $(date +%Y-%m-%d/%H:%M:%S.%N)" >>$log

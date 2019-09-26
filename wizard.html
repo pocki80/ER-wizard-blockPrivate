@@ -1,0 +1,67 @@
+<!--
+
+EdgeMAX Wizard "ER-wizard-blockPrivate" created 09/2019 by CPO for FunkFeuer.at
+Works on EdgeRouter and EdgeRouter X / X-SFP (system version 1.10.0+)
+versioninfo=201909260
+^-- use version identifier as number: YYYYMMDDX whereas X can be intraday-version
+autoupdate=201901010
+^-- set autoupdate the same version identifier to allow autoupdates
+
+
+-->
+<legend style="position:absolute;right:0px;padding:5px;">
+    <center>EdgeMAX Wizard "ER-wizard-blockPrivate"<br>created 09/2019 by CPO for FunkFeuer.at<br>
+    Version 20190926</center>
+</legend>
+<div class="instructions">
+    <h3>blockPrivate</h3>
+</div>
+<div style="padding:15px;border: 1px solid lightgray;width:650px;float:none;clear:both;">
+  <table border="0">
+    <tr><td style="vertical-align:middle">Update Info:</td>   <td><input style="right:10px" id="updatestatus" name="updatestatus" type="text" size="60" disabled /></td></tr>
+    <tr><td colspan="2"><div><span><input id="updatefromgithub" name="updatefromgithub" type="checkbox" />&nbsp;</span></div><div><span class="text" data-infotip='Load and install newest version directly from Github'> Upgrade Wizard from GitHub (online only) on 'Apply'</span></div></td></tr>
+    <tr><td colspan="2"><div><span><input id="autoupdatefromgithub" name="autoupdatefromgithub" type="checkbox" />&nbsp;</span></div><div><span class="text" data-infotip='Runs a daily job checking for updates - installs available auto-updates automatically'> Upgrade Wizard from GitHub <b>automatically</b></span></div></td></tr>
+  </table>
+</div>
+
+<fieldset id="interfaces" name="interfaces" class="primary expanded">
+    <legend>Block incoming/outgoing traffic from RFC1918-Addresses from/to the following interfaces:</legend>
+    Make your private LAN ipv4 ranges (10/8 and 172.16/12 and 192.168/16) unreachable from any TRANSIT or WAN interfaces.
+
+    <div class="addable" data-min="1" data-max="1" data-object="interfaces" data-objectify="1">
+        <div class="addable-template" style="padding-top:0px;">
+            <div class="multi">
+                <div><input name="enabled" type="checkbox" onclick="validate()" disabled /></div>
+                <div><input id="interface" name="interfaces" size="5" disabled /></div>
+                <div><input id="rules" name="rules" size="8" disabled /></div>
+                <div><input id="name" name="name" size="40" disabled /></div>
+            </div>
+        </div>
+        <div class="addable-container"></div>
+        <button type="button" class="addable-add" style="position:absolute;right:0px;opacity:0.0;filter:alpha(opacity=0);" disabled></button>
+    </div>
+</fieldset>
+
+<br><br>
+<script>
+function colors() {
+    document.getElementById('updatestatus').disabled = true;
+    var input = document.getElementById('updatestatus');
+    input.style.color = "black";
+    document.getElementById('updatefromgithub').disabled = true;
+    if (input.value.match(/new version available/)) {
+        document.getElementById('updatefromgithub').disabled = false;
+        input.style.color = "red";
+    } else if (input.value.match(/up-to-date/)) {
+        input.style.color = "green";
+    } 
+}
+function validate() {
+}
+document.onchange=function(){
+    colors();
+}
+document.onsubmit=function(){
+    colors();
+}
+</script>
