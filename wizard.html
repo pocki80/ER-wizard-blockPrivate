@@ -2,16 +2,16 @@
 
 EdgeMAX Wizard "ER-wizard-blockPrivate" created 09/2019 by CPO for FunkFeuer.at
 Works on EdgeRouter and EdgeRouter X / X-SFP (system version 1.10.0+)
-versioninfo=201909301
+versioninfo=202105261
 ^-- use version identifier as number: YYYYMMDDX whereas X can be intraday-version
-autoupdate=201909301
+autoupdate=202105261
 ^-- set autoupdate the same version identifier to allow autoupdates
 
 
 -->
 <legend style="position:absolute;right:0px;padding:5px;">
     <center>EdgeMAX Wizard "ER-wizard-blockPrivate"<br>created 09/2019 by CPO for FunkFeuer.at<br>
-    Version 20190930</center>
+    Version 20210526</center>
 </legend>
 <div class="instructions">
     <h3>blockPrivate</h3>
@@ -28,7 +28,7 @@ autoupdate=201909301
     <legend>Block incoming/outgoing traffic from RFC1918-Addresses</legend>
     Make your private LAN IPv4 ranges (10/8 and 172.16/12 and 192.168/16) unreachable from any TRANSIT or WAN interfaces.<br>
     <br>
-    Check all interfaces that <b>must not</b> accept incomming traffic (post routing), <b>must not</b> transit traffic (forward) and <b>must not</b> leak out 
+    Check all interfaces that <b>must not</b> accept incomming traffic (prerouting), <b>must not</b> transit traffic (forward) and <b>must not</b> leak out 
     traffic (output) destined to an IPv4 address which is reserved for private subnets. Such IPs are not designed to be routed on the Internet anyway.<br>
     <br>
     This wizard will populate iptables rules for the interfaces checked below: INPUT and FORWARD from, and FORWARD out of those interfaces (before applying NAT rules), and OUTPUT out of these interfaces.<br>
